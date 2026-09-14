@@ -2,31 +2,14 @@ import streamlit as st
 
 st.set_page_config(page_title="LSM - Hệ Thống Học Tập", layout="wide")
 
-# 1. KHỞI TẠO DỮ LIỆU
+# 1. KHỞI TẠO DỮ LIỆU RỖNG (SẠCH)
 if "users" not in st.session_state:
-    # Danh sách người dùng hệ thống
-    st.session_state.users = {
-        "gv@gmail.com": {"pass": "123", "role": "Giáo viên", "name": "Thầy Giáo A"},
-        "hs1@gmail.com": {"pass": "123", "role": "Học sinh", "name": "Nguyễn Văn A"},
-        "hs2@gmail.com": {"pass": "123", "role": "Học sinh", "name": "Trần Thị B"}
-    }
+    st.session_state.users = {}
 
 if "classes" not in st.session_state:
-    # Quản lý lớp học (Lưu danh sách email học sinh thuộc từng lớp)
     st.session_state.classes = {
-        "Lớp 7A1": [],
+        "Lớp 7A1": [],  # CÓ DẤU PHẨY Ở ĐÂY
         "Lớp 7A2": []
-         "Lớp 7A3": [],
-        "Lớp 7A4": []
-         "Lớp 7A5": [],
-        "Lớp 7A6": []
-         "Lớp 7A7": [],
-        "Lớp 7A8": []
-         "Lớp 7A9": [],
-        "Lớp 7A10": []
-         "Lớp 7A11": [],
-        "Lớp 7A12": []
-         "Lớp 7A13": [],
     }
 
 if "lessons" not in st.session_state:
@@ -112,12 +95,10 @@ else:
             search_email = st.text_input("Nhập Email học sinh cung cấp:").strip()
             
             if st.button("Tìm & Thêm Vào Lớp"):
-                # Kiểm tra email có trong hệ thống không
                 if search_email in st.session_state.users:
                     student_info = st.session_state.users[search_email]
                     
                     if student_info["role"] == "Học sinh":
-                        # Kiểm tra xem đã có trong lớp chưa
                         if search_email not in st.session_state.classes[selected_class]:
                             st.session_state.classes[selected_class].append(search_email)
                             st.success(f"Đã thêm học sinh **{student_info['name']}** ({search_email}) vào {selected_class}!")
