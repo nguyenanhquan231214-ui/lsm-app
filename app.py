@@ -19,7 +19,7 @@ GRADE_7_SUBJECTS = [
             {
                 "id": "toan-7-bai-1",
                 "title": "Bài 1: Tập hợp các số hữu tỉ",
-                "video_url": "https://www.youtube.com/watch?v=X30wO8T08U4",
+                "video_url": "https://www.youtube.com/watch?v=x534MglTm8o",
                 "duration": "15 phút",
                 "description": "Khái niệm số hữu tỉ, biểu diễn số hữu tỉ trên trục số."
             },
