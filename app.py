@@ -8,8 +8,19 @@ if "users" not in st.session_state:
 
 if "classes" not in st.session_state:
     st.session_state.classes = {
-        "Lớp 7A1": [],  # CÓ DẤU PHẨY Ở ĐÂY
-        "Lớp 7A2": []
+        "Lớp 7A1": [],
+        "Lớp 7A2": [],
+        "Lớp 7A3": [],
+        "Lớp 7A4": [],
+        "Lớp 7A5": [],
+        "Lớp 7A6": [],
+        "Lớp 7A7": [],
+        "Lớp 7A8": [],
+        "Lớp 7A9": [],
+        "Lớp 7A10": [],
+        "Lớp 7A11": [],
+        "Lớp 7A12": [],
+        "Lớp 7A13": []
     }
 
 if "lessons" not in st.session_state:
