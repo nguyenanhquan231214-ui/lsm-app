@@ -1,30 +1,21 @@
-import json
 import streamlit as st
-from streamlit_google_auth import Authenticate
+from requests_oauthlib import OAuth2Session
 
 st.set_page_config(page_title="LSM - Hệ Thống Học Tập", layout="wide")
 
-# 1. TẠO FILE TẠM CẤU HÌNH GOOGLE OAUTH
-credentials_dict = {
-    "web": {
-        "client_id": st.secrets["google_oauth"]["client_id"],
-        "client_secret": st.secrets["google_oauth"]["client_secret"],
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "redirect_uris": [st.secrets["google_oauth"]["redirect_uri"]]
-    }
-}
+# 1. CẤU HÌNH GOOGLE OAUTH
+CLIENT_ID = st.secrets["google_oauth"]["client_id"]
+CLIENT_SECRET = st.secrets["google_oauth"]["client_secret"]
+REDIRECT_URI = st.secrets["google_oauth"]["redirect_uri"]
 
-with open("google_creds.json", "w") as f:
-    json.dump(credentials_dict, f)
-
-# KHỞI TẠO AUTHENTICATOR
-authenticator = Authenticate(
-    secret_credentials_path="google_creds.json",
-    cookie_name="lsm_google_auth_cookie",
-    cookie_key="chuoi_bi_mat_random_123456",
-    cookie_expiry_days=30
-)
+AUTHORIZATION_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+USER_INFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
+SCOPE = [
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "openid"
+]
 
 # 2. KHỞI TẠO DỮ LIỆU APP (13 lớp)
 if "users" not in st.session_state:
@@ -43,15 +34,38 @@ if "lessons" not in st.session_state:
         }
     ]
 
-# Kiểm tra trạng thái đăng nhập Google
-authenticator.check_authenticity()
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+# Xử lý Callback sau khi người dùng đăng nhập Google xong
+query_params = st.query_params
+if "code" in query_params and not st.session_state.logged_in:
+    code = query_params["code"]
+    try:
+        google = OAuth2Session(CLIENT_ID, redirect_uri=REDIRECT_URI)
+        token = google.fetch_token(
+            TOKEN_URL,
+            client_secret=CLIENT_SECRET,
+            code=code
+        )
+        resp = google.get(USER_INFO_URL)
+        user_data = resp.json()
+        
+        st.session_state.user_info = user_data
+        st.session_state.logged_in = True
+        st.query_params.clear()
+        st.rerun()
+    except Exception as e:
+        st.error("Lỗi đăng nhập Google, vui lòng thử lại!")
 
 # --- MÀN HÌNH CHƯA ĐĂNG NHẬP ---
-if not st.session_state.get('connected', False):
+if not st.session_state.logged_in:
     st.title("🎓 LSM - Hệ Thống Học Tập")
     st.write("Vui lòng đăng nhập bằng tài khoản Google để tiếp tục.")
     
-    authorization_url = authenticator.get_authorization_url()
+    google = OAuth2Session(CLIENT_ID, redirect_uri=REDIRECT_URI, scope=SCOPE)
+    authorization_url, state = google.authorization_url(AUTHORIZATION_BASE_URL, access_type="offline")
+    
     st.markdown(f'''
         <a href="{authorization_url}" target="_self" style="
             background-color: #4285F4;
@@ -65,7 +79,7 @@ if not st.session_state.get('connected', False):
         ">🌐 Đăng nhập bằng Google</a>
     ''', unsafe_allow_html=True)
 
-# --- SAU KHI ĐĂNG NHẬP GOOGLE THÀNH CÔNG ---
+# --- SAU KHI ĐĂNG NHẬP THÀNH CÔNG ---
 else:
     user_info = st.session_state.get('user_info', {})
     user_email = user_info.get('email', '').strip().lower()
@@ -91,12 +105,12 @@ else:
     st.sidebar.write(f"Vai trò: **{user_role}**")
     
     if st.sidebar.button("Đăng Xuất"):
-        authenticator.logout()
+        st.session_state.logged_in = False
+        st.session_state.pop('user_info', None)
         st.rerun()
 
     if user_role == "Giáo viên":
         st.title("👨‍🏫 Trang Quản Lý Dành Cho Giáo Viên")
-        
         tab_classes, tab_add_lesson = st.tabs(["🏫 Quản Lý Lớp Học & Thêm Học Sinh", "➕ Thêm Bài Học Mới"])
         
         with tab_classes:
