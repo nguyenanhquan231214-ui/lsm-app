@@ -1,25 +1,14 @@
 import streamlit as st
-from requests_oauthlib import OAuth2Session
 
 st.set_page_config(page_title="LSM - Hệ Thống Học Tập", layout="wide")
 
-# 1. CẤU HÌNH GOOGLE OAUTH
-CLIENT_ID = st.secrets["google_oauth"]["client_id"]
-CLIENT_SECRET = st.secrets["google_oauth"]["client_secret"]
-REDIRECT_URI = st.secrets["google_oauth"]["redirect_uri"]
-
-AUTHORIZATION_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
-USER_INFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
-SCOPE = [
-    "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/userinfo.profile",
-    "openid"
-]
-
-# 2. KHỞI TẠO DỮ LIỆU APP (13 lớp)
+# 1. KHỞI TẠO DỮ LIỆU APP (13 lớp)
 if "users" not in st.session_state:
-    st.session_state.users = {}
+    # Tài khoản mẫu có sẵn để test nhanh
+    st.session_state.users = {
+        "gv@gmail.com": {"name": "Thầy Giáo Mẫu", "role": "Giáo viên", "pass": "123"},
+        "hs@gmail.com": {"name": "Học Sinh Mẫu", "role": "Học sinh", "pass": "123"}
+    }
 
 if "classes" not in st.session_state:
     st.session_state.classes = {f"Lớp 7A{i}": [] for i in range(1, 14)}
@@ -34,81 +23,66 @@ if "lessons" not in st.session_state:
         }
     ]
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+if "current_user" not in st.session_state:
+    st.session_state.current_user = None
 
-# Xử lý Callback sau khi người dùng đăng nhập Google xong
-query_params = st.query_params
-if "code" in query_params and not st.session_state.logged_in:
-    code = query_params["code"]
-    try:
-        google = OAuth2Session(CLIENT_ID, redirect_uri=REDIRECT_URI)
-        token = google.fetch_token(
-            TOKEN_URL,
-            client_secret=CLIENT_SECRET,
-            code=code
-        )
-        resp = google.get(USER_INFO_URL)
-        user_data = resp.json()
-        
-        st.session_state.user_info = user_data
-        st.session_state.logged_in = True
-        st.query_params.clear()
-        st.rerun()
-    except Exception as e:
-        st.error("Lỗi đăng nhập Google, vui lòng thử lại!")
-
-# --- MÀN HÌNH CHƯA ĐĂNG NHẬP ---
-if not st.session_state.logged_in:
+# --- MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ ---
+if not st.session_state.current_user:
     st.title("🎓 LSM - Hệ Thống Học Tập")
-    st.write("Vui lòng đăng nhập bằng tài khoản Google để tiếp tục.")
     
-    google = OAuth2Session(CLIENT_ID, redirect_uri=REDIRECT_URI, scope=SCOPE)
-    authorization_url, state = google.authorization_url(AUTHORIZATION_BASE_URL, access_type="offline")
+    tab_login, tab_register = st.tabs(["🔑 Đăng Nhập", "📝 Đăng Ký Tài Khoản"])
     
-    st.markdown(f'''
-        <a href="{authorization_url}" target="_self" style="
-            background-color: #4285F4;
-            color: white;
-            padding: 12px 24px;
-            text-decoration: none;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
-            display: inline-block;
-        ">🌐 Đăng nhập bằng Google</a>
-    ''', unsafe_allow_html=True)
+    with tab_login:
+        email_login = st.text_input("Email:").strip().lower()
+        pass_login = st.text_input("Mật khẩu:", type="password")
+        
+        if st.button("Đăng Nhập"):
+            if email_login in st.session_state.users:
+                user = st.session_state.users[email_login]
+                if user["pass"] == pass_login:
+                    st.session_state.current_user = {**user, "email": email_login}
+                    st.success("Đăng nhập thành công!")
+                    st.rerun()
+                else:
+                    st.error("Sai mật khẩu!")
+            else:
+                st.error("Email chưa được đăng ký!")
+                
+    with tab_register:
+        reg_name = st.text_input("Họ và Tên:")
+        reg_email = st.text_input("Email đăng ký:").strip().lower()
+        reg_pass = st.text_input("Tạo Mật khẩu:", type="password")
+        reg_role = st.radio("Vai trò:", ["Học sinh", "Giáo viên"])
+        
+        if st.button("Tạo Tài Khoản"):
+            if reg_email and reg_pass and reg_name:
+                if reg_email not in st.session_state.users:
+                    st.session_state.users[reg_email] = {
+                        "name": reg_name,
+                        "role": reg_role,
+                        "pass": reg_pass
+                    }
+                    st.success("Đăng ký thành công! Hãy chuyển sang tab Đăng Nhập.")
+                else:
+                    st.warning("Email này đã tồn tại!")
+            else:
+                st.warning("Vui lòng điền đầy đủ thông tin!")
 
-# --- SAU KHI ĐĂNG NHẬP THÀNH CÔNG ---
+# --- GIAO DIỆN SAU KHI ĐĂNG NHẬP ---
 else:
-    user_info = st.session_state.get('user_info', {})
-    user_email = user_info.get('email', '').strip().lower()
-    user_name = user_info.get('name', 'Người dùng')
-
-    if user_email not in st.session_state.users:
-        st.warning(f"Xin chào **{user_name}**! Đây là lần đầu bạn đăng nhập.")
-        role = st.radio("Vui lòng xác nhận vai trò của bạn:", ["Học sinh", "Giáo viên"])
-        if st.button("Xác nhận"):
-            st.session_state.users[user_email] = {
-                "name": user_name,
-                "role": role
-            }
-            st.rerun()
-        st.stop()
-
-    current_user = st.session_state.users[user_email]
-    user_role = current_user["role"]
+    user = st.session_state.current_user
+    user_role = user["role"]
 
     st.sidebar.title("📌 Menu")
-    st.sidebar.write(f"Xin chào: **{user_name}**")
-    st.sidebar.write(f"Email: `{user_email}`")
+    st.sidebar.write(f"Xin chào: **{user['name']}**")
+    st.sidebar.write(f"Email: `{user['email']}`")
     st.sidebar.write(f"Vai trò: **{user_role}**")
     
     if st.sidebar.button("Đăng Xuất"):
-        st.session_state.logged_in = False
-        st.session_state.pop('user_info', None)
+        st.session_state.current_user = None
         st.rerun()
 
+    # GIAO DIỆN GIÁO VIÊN
     if user_role == "Giáo viên":
         st.title("👨‍🏫 Trang Quản Lý Dành Cho Giáo Viên")
         tab_classes, tab_add_lesson = st.tabs(["🏫 Quản Lý Lớp Học & Thêm Học Sinh", "➕ Thêm Bài Học Mới"])
@@ -118,8 +92,8 @@ else:
             selected_class = st.selectbox("Chọn lớp học:", list(st.session_state.classes.keys()))
             
             st.markdown("---")
-            st.write("### 🔍 Thêm Học Sinh Vào Lớp Bằng Gmail")
-            search_email = st.text_input("Nhập Gmail học sinh:").strip().lower()
+            st.write("### 🔍 Thêm Học Sinh Vào Lớp Bằng Email")
+            search_email = st.text_input("Nhập Email học sinh:").strip().lower()
             
             if st.button("Tìm & Thêm Vào Lớp"):
                 if search_email in st.session_state.users:
@@ -127,14 +101,14 @@ else:
                     if student_info["role"] == "Học sinh":
                         if search_email not in st.session_state.classes[selected_class]:
                             st.session_state.classes[selected_class].append(search_email)
-                            st.success(f"Đã thêm học sinh **{student_info['name']}** ({search_email}) vào {selected_class}!")
+                            st.success(f"Đã thêm **{student_info['name']}** vào {selected_class}!")
                             st.rerun()
                         else:
-                            st.warning("Học sinh này đã có trong lớp rồi!")
+                            st.warning("Học sinh này đã có trong lớp!")
                     else:
-                        st.error("Email này thuộc tài khoản Giáo viên!")
+                        st.error("Email này là tài khoản Giáo viên!")
                 else:
-                    st.error("Không tìm thấy Email! Học sinh cần bấm nút Đăng nhập bằng Google trên trang web 1 lần.")
+                    st.error("Không tìm thấy Email! Học sinh cần Đăng ký tài khoản trước.")
 
             st.markdown("---")
             st.write(f"### 📋 Danh sách học sinh thuộc {selected_class}")
@@ -166,10 +140,11 @@ else:
                         "video_url": new_video,
                         "desc": new_desc
                     })
-                    st.success("Đã thêm bài học mới thành công!")
+                    st.success("Đã thêm bài học thành công!")
                 else:
                     st.warning("Vui lòng nhập Tên bài học và Link YouTube!")
 
+    # GIAO DIỆN HỌC SINH
     else:
         st.title("📖 Màn Hình Học Tập - Học Sinh")
         lesson_titles = [l["title"] for l in st.session_state.lessons]
