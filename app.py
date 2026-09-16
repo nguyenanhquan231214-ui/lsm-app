@@ -1,18 +1,32 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 
 st.set_page_config(page_title="LSM - Hệ Thống Học Tập", layout="wide")
 
-# 1. KHỞI TẠO DỮ LIỆU APP (13 lớp)
-if "users" not in st.session_state:
-    # Tài khoản mẫu có sẵn để test nhanh
-    st.session_state.users = {
-        "gv@gmail.com": {"name": "Thầy Giáo Mẫu", "role": "Giáo viên", "pass": "123"},
-        "hs@gmail.com": {"name": "Học Sinh Mẫu", "role": "Học sinh", "pass": "123"}
-    }
+# 1. KẾT NỐI GOOGLE SHEETS
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-if "classes" not in st.session_state:
-    st.session_state.classes = {f"Lớp 7A{i}": [] for i in range(1, 14)}
+def load_users():
+    try:
+        # TTL=0 để luôn làm mới dữ liệu từ Google Sheets
+        df = conn.read(ttl=0)
+        return df
+    except Exception:
+        return pd.DataFrame(columns=["Name", "Email", "Password", "Role"])
 
+def save_user(name, email, password, role):
+    df = load_users()
+    new_user = pd.DataFrame([{
+        "Name": name.strip(),
+        "Email": email.strip().lower(),
+        "Password": str(password).strip(),
+        "Role": role.strip()
+    }])
+    updated_df = pd.concat([df, new_user], ignore_index=True)
+    conn.update(data=updated_df)
+
+# 2. KHỞI TẠO BÀI HỌC VÀ LỚP HỌC (13 LỚP)
 if "lessons" not in st.session_state:
     st.session_state.lessons = [
         {
@@ -22,6 +36,9 @@ if "lessons" not in st.session_state:
             "desc": "Khái niệm số hữu tỉ, biểu diễn số hữu tỉ trên trục số."
         }
     ]
+
+if "classes" not in st.session_state:
+    st.session_state.classes = {f"Lớp 7A{i}": [] for i in range(1, 14)}
 
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
@@ -34,41 +51,54 @@ if not st.session_state.current_user:
     
     with tab_login:
         email_login = st.text_input("Email:").strip().lower()
-        pass_login = st.text_input("Mật khẩu:", type="password")
+        pass_login = st.text_input("Mật khẩu:", type="password").strip()
         
         if st.button("Đăng Nhập"):
-            if email_login in st.session_state.users:
-                user = st.session_state.users[email_login]
-                if user["pass"] == pass_login:
-                    st.session_state.current_user = {**user, "email": email_login}
+            df_users = load_users()
+            if not df_users.empty:
+                # Chuẩn hóa dữ liệu để so sánh
+                df_users['Clean_Email'] = df_users['Email'].astype(str).str.strip().str.lower()
+                df_users['Clean_Pass'] = df_users['Password'].astype(str).str.strip()
+                
+                user_match = df_users[(df_users['Clean_Email'] == email_login) & (df_users['Clean_Pass'] == pass_login)]
+                
+                if not user_match.empty:
+                    user_info = user_match.iloc[0]
+                    st.session_state.current_user = {
+                        "name": str(user_info["Name"]).strip(),
+                        "email": str(user_info["Clean_Email"]),
+                        "role": str(user_info["Role"]).strip()
+                    }
                     st.success("Đăng nhập thành công!")
                     st.rerun()
                 else:
-                    st.error("Sai mật khẩu!")
+                    st.error("Sai Email hoặc Mật khẩu!")
             else:
-                st.error("Email chưa được đăng ký!")
+                st.error("Chưa có tài khoản nào trên hệ thống. Vui lòng Đăng ký!")
                 
     with tab_register:
-        reg_name = st.text_input("Họ và Tên:")
+        reg_name = st.text_input("Họ và Tên:").strip()
         reg_email = st.text_input("Email đăng ký:").strip().lower()
-        reg_pass = st.text_input("Tạo Mật khẩu:", type="password")
+        reg_pass = st.text_input("Tạo Mật khẩu:", type="password").strip()
         reg_role = st.radio("Vai trò:", ["Học sinh", "Giáo viên"])
         
         if st.button("Tạo Tài Khoản"):
             if reg_email and reg_pass and reg_name:
-                if reg_email not in st.session_state.users:
-                    st.session_state.users[reg_email] = {
-                        "name": reg_name,
-                        "role": reg_role,
-                        "pass": reg_pass
-                    }
-                    st.success("Đăng ký thành công! Hãy chuyển sang tab Đăng Nhập.")
+                df_users = load_users()
+                if not df_users.empty:
+                    existing_emails = df_users['Email'].astype(str).str.strip().str.lower().values
                 else:
-                    st.warning("Email này đã tồn tại!")
+                    existing_emails = []
+                    
+                if reg_email in existing_emails:
+                    st.warning("Email này đã được đăng ký rồi!")
+                else:
+                    save_user(reg_name, reg_email, reg_pass, reg_role)
+                    st.success("Đã đăng ký thành công! Hãy chuyển sang tab Đăng Nhập.")
             else:
                 st.warning("Vui lòng điền đầy đủ thông tin!")
 
-# --- GIAO DIỆN SAU KHI ĐĂNG NHẬP ---
+# --- MÀN HÌNH SAU KHI ĐĂNG NHẬP ---
 else:
     user = st.session_state.current_user
     user_role = user["role"]
@@ -96,32 +126,35 @@ else:
             search_email = st.text_input("Nhập Email học sinh:").strip().lower()
             
             if st.button("Tìm & Thêm Vào Lớp"):
-                if search_email in st.session_state.users:
-                    student_info = st.session_state.users[search_email]
-                    if student_info["role"] == "Học sinh":
-                        if search_email not in st.session_state.classes[selected_class]:
-                            st.session_state.classes[selected_class].append(search_email)
-                            st.success(f"Đã thêm **{student_info['name']}** vào {selected_class}!")
+                df_users = load_users()
+                if not df_users.empty:
+                    # Chuẩn hóa dữ liệu tìm kiếm
+                    df_users['Clean_Email'] = df_users['Email'].astype(str).str.strip().str.lower()
+                    df_users['Clean_Role'] = df_users['Role'].astype(str).str.strip()
+                    
+                    target_email = search_email
+                    student_match = df_users[(df_users['Clean_Email'] == target_email) & (df_users['Clean_Role'] == 'Học sinh')]
+                    
+                    if not student_match.empty:
+                        student_name = str(student_match.iloc[0]["Name"]).strip()
+                        current_class_emails = [s['email'] for s in st.session_state.classes[selected_class]]
+                        
+                        if target_email not in current_class_emails:
+                            st.session_state.classes[selected_class].append({"name": student_name, "email": target_email})
+                            st.success(f"Đã thêm học sinh **{student_name}** vào {selected_class}!")
                             st.rerun()
                         else:
-                            st.warning("Học sinh này đã có trong lớp!")
+                            st.warning("Học sinh này đã có trong lớp rồi!")
                     else:
-                        st.error("Email này là tài khoản Giáo viên!")
+                        st.error("Không tìm thấy Email! Hãy đảm bảo tài khoản đã đăng ký và chọn vai trò 'Học sinh'.")
                 else:
-                    st.error("Không tìm thấy Email! Học sinh cần Đăng ký tài khoản trước.")
+                    st.error("Chưa có dữ liệu học sinh nào trên hệ thống.")
 
             st.markdown("---")
             st.write(f"### 📋 Danh sách học sinh thuộc {selected_class}")
             student_list = st.session_state.classes[selected_class]
             if student_list:
-                table_data = []
-                for email in student_list:
-                    info = st.session_state.users.get(email, {})
-                    table_data.append({
-                        "Họ và Tên": info.get("name", "Chưa cập nhật"),
-                        "Email": email
-                    })
-                st.table(table_data)
+                st.table(pd.DataFrame(student_list))
             else:
                 st.info("Lớp này chưa có học sinh nào.")
 
