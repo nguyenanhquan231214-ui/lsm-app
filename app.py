@@ -1,17 +1,28 @@
+import json
+import tempfile
 import streamlit as st
 from streamlit_google_auth import Authenticate
 
 st.set_page_config(page_title="LSM - Hệ Thống Học Tập", layout="wide")
 
-# 1. CẤU HÌNH GOOGLE OAUTH
-authenticator = Authenticate(
-    secret_credentials_path={'web': {
+# 1. CẤU HÌNH GOOGLE OAUTH TỪ ST.SECRETS
+oauth_config = {
+    "web": {
         "client_id": st.secrets["google_oauth"]["client_id"],
         "client_secret": st.secrets["google_oauth"]["client_secret"],
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",
         "redirect_uris": [st.secrets["google_oauth"]["redirect_uri"]]
-    }},
+    }
+}
+
+# Tạo file JSON tạm thời để truyền vào Authenticate
+with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".json") as temp_file:
+    json.dump(oauth_config, temp_file)
+    temp_credentials_path = temp_file.name
+
+authenticator = Authenticate(
+    secret_credentials_path=temp_credentials_path,
     cookie_name='lsm_google_auth_cookie',
     cookie_key='chuoi_bi_mat_random_123456',
     cookie_expiry_days=30
@@ -42,7 +53,6 @@ if not st.session_state.get('connected', False):
     st.title("🎓 LSM - Hệ Thống Học Tập")
     st.write("Vui lòng đăng nhập bằng tài khoản Google để tiếp tục.")
     
-    # Nút bấm đăng nhập Google chính thức
     authorization_url = authenticator.get_authorization_url()
     st.markdown(f'''
         <a href="{authorization_url}" target="_self" style="
@@ -63,7 +73,6 @@ else:
     user_email = user_info.get('email', '').strip().lower()
     user_name = user_info.get('name', 'Người dùng')
 
-    # Lần đầu tiên đăng nhập: Chọn vai trò
     if user_email not in st.session_state.users:
         st.warning(f"Xin chào **{user_name}**! Đây là lần đầu bạn đăng nhập.")
         role = st.radio("Vui lòng xác nhận vai trò của bạn:", ["Học sinh", "Giáo viên"])
@@ -78,7 +87,6 @@ else:
     current_user = st.session_state.users[user_email]
     user_role = current_user["role"]
 
-    # --- SIDEBAR ---
     st.sidebar.title("📌 Menu")
     st.sidebar.write(f"Xin chào: **{user_name}**")
     st.sidebar.write(f"Email: `{user_email}`")
@@ -88,7 +96,6 @@ else:
         authenticator.logout()
         st.rerun()
 
-    # --- GIAO DIỆN GIÁO VIÊN ---
     if user_role == "Giáo viên":
         st.title("👨‍🏫 Trang Quản Lý Dành Cho Giáo Viên")
         
@@ -151,7 +158,6 @@ else:
                 else:
                     st.warning("Vui lòng nhập Tên bài học và Link YouTube!")
 
-    # --- GIAO DIỆN HỌC SINH ---
     else:
         st.title("📖 Màn Hình Học Tập - Học Sinh")
         lesson_titles = [l["title"] for l in st.session_state.lessons]
