@@ -1,12 +1,11 @@
 import json
-import tempfile
 import streamlit as st
 from streamlit_google_auth import Authenticate
 
 st.set_page_config(page_title="LSM - Hệ Thống Học Tập", layout="wide")
 
-# 1. CẤU HÌNH GOOGLE OAUTH TỪ ST.SECRETS
-oauth_config = {
+# 1. TẠO FILE TẠM CẤU HÌNH GOOGLE OAUTH
+credentials_dict = {
     "web": {
         "client_id": st.secrets["google_oauth"]["client_id"],
         "client_secret": st.secrets["google_oauth"]["client_secret"],
@@ -16,15 +15,14 @@ oauth_config = {
     }
 }
 
-# Tạo file JSON tạm thời để truyền vào Authenticate
-with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".json") as temp_file:
-    json.dump(oauth_config, temp_file)
-    temp_credentials_path = temp_file.name
+with open("google_creds.json", "w") as f:
+    json.dump(credentials_dict, f)
 
+# KHỞI TẠO AUTHENTICATOR
 authenticator = Authenticate(
-    secret_credentials_path=temp_credentials_path,
-    cookie_name='lsm_google_auth_cookie',
-    cookie_key='chuoi_bi_mat_random_123456',
+    secret_credentials_path="google_creds.json",
+    cookie_name="lsm_google_auth_cookie",
+    cookie_key="chuoi_bi_mat_random_123456",
     cookie_expiry_days=30
 )
 
